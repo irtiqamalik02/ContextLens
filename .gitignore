@@ -1,0 +1,12 @@
+# Python virtual environment
+aienv/
+
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
