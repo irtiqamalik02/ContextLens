@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ContextLens</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1100px;
+      margin: 32px auto;
+      padding: 0 16px;
+      background: #f6f7fb;
+      color: #111;
+    }
+    h1 { margin-bottom: 6px; }
+    .muted { color: #666; margin-top: 0; }
+    .card {
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin: 10px 0 6px;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #cfcfcf;
+      font-size: 14px;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    button {
+      margin-top: 12px;
+      border: none;
+      background: #111;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { opacity: 0.92; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 12px;
+      margin: 8px 0 0;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 760px) {
+      .row { grid-template-columns: 1fr; }
+    }
+    .small { font-size: 13px; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>ContextLens</h1>
+  <p class="muted">Local repo + Swagger assistant with role-aware answers. No API key needed.</p>
+
+  <div class="card">
+    <h3>Index local repo</h3>
+    <div class="small">Enter the absolute path to your local repo. Example: <code>/Users/you/projects/myrepo</code></div>
+    <label for="repoPath">Repo path</label>
+    <input id="repoPath" placeholder="/Users/you/projects/myrepo" />
+    <button onclick="indexRepo()">Index Repo</button>
+    <pre id="repoStatus">Not indexed yet.</pre>
+  </div>
+
+  <div class="card">
+    <h3>Index Swagger/OpenAPI</h3>
+    <div class="small">Upload a <code>.yaml</code>, <code>.yml</code>, or <code>.json</code> file.</div>
+    <label for="swaggerFile">Swagger file</label>
+    <input id="swaggerFile" type="file" accept=".yaml,.yml,.json,.txt" />
+    <button onclick="indexSwagger()">Index Swagger</button>
+    <pre id="swaggerStatus">No Swagger file indexed yet.</pre>
+  </div>
+
+  <div class="card">
+    <h3>Ask a question</h3>
+    <div class="row">
+      <div>
+        <label for="role">Role</label>
+        <select id="role">
+          <option>Business</option>
+          <option>Product Manager</option>
+          <option>Developer</option>
+          <option>Tester</option>
+        </select>
+      </div>
+      <div>
+        <label for="question">Question</label>
+        <input id="question" placeholder="Is this scenario possible in our app?" />
+      </div>
+    </div>
+    <button onclick="ask()">Ask</button>
+
+    <label>Answer</label>
+    <pre id="answer">Waiting for a question...</pre>
+
+    <label>Sources</label>
+    <pre id="sources">No sources yet.</pre>
+  </div>
+
+  <script>
+    async function indexRepo() {
+      const path = document.getElementById("repoPath").value.trim();
+      if (!path) {
+        alert("Enter a repo path");
+        return;
+      }
+
+      document.getElementById("repoStatus").textContent = "Indexing...";
+      const res = await fetch("/index/repo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path })
+      });
+
+      const data = await res.json();
+      document.getElementById("repoStatus").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function indexSwagger() {
+      const fileInput = document.getElementById("swaggerFile");
+      if (!fileInput.files.length) {
+        alert("Choose a Swagger/OpenAPI file first");
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", fileInput.files[0]);
+
+      document.getElementById("swaggerStatus").textContent = "Indexing...";
+      const res = await fetch("/index/swagger", {
+        method: "POST",
+        body: form
+      });
+
+      const data = await res.json();
+      document.getElementById("swaggerStatus").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function ask() {
+      const role = document.getElementById("role").value;
+      const question = document.getElementById("question").value.trim();
+
+      if (!question) {
+        alert("Enter a question");
+        return;
+      }
+
+      document.getElementById("answer").textContent = "Thinking...";
+
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, question })
+      });
+
+      const data = await res.json();
+      document.getElementById("answer").textContent = data.answer || "";
+      document.getElementById("sources").textContent = JSON.stringify(data.sources || [], null, 2);
+    }
+  </script>
+</body>
+</html>
