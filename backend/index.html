@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ContextLens</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 32px auto;
       padding: 0 16px;
       background: #f6f7fb;
@@ -35,6 +36,7 @@
       border-radius: 10px;
       border: 1px solid #cfcfcf;
       font-size: 14px;
+      background: white;
     }
     textarea { min-height: 110px; resize: vertical; }
     button {
@@ -45,7 +47,11 @@
       cursor: pointer;
       font-weight: 600;
     }
-    button:hover { opacity: 0.92; }
+    button:hover:not(:disabled) { opacity: 0.92; }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     pre {
       white-space: pre-wrap;
       word-break: break-word;
@@ -60,44 +66,112 @@
       grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
-    @media (max-width: 760px) {
+    @media (max-width: 820px) {
       .row { grid-template-columns: 1fr; }
     }
     .small { font-size: 13px; color: #666; }
+    .repo-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .repo-item {
+      border: 1px solid #e8e8e8;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fcfcfc;
+    }
+    .inline-btn {
+      width: auto;
+      padding: 10px 14px;
+      margin-top: 0;
+    }
+    .danger {
+      background: #b42318;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .actions button {
+      width: auto;
+      padding: 10px 14px;
+    }
+    .source-hint {
+      font-size: 12px;
+      color: #777;
+      margin-top: 4px;
+    }
+    code { background: #f1f1f1; padding: 2px 5px; border-radius: 6px; }
+    .answer-box {
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 12px;
+      margin: 8px 0 0;
+      line-height: 1.6;
+    }
+    .answer-box h1, .answer-box h2, .answer-box h3, .answer-box h4 {
+      margin: 12px 0 6px;
+    }
+    .answer-box h1:first-child, .answer-box h2:first-child, .answer-box h3:first-child {
+      margin-top: 0;
+    }
+    .answer-box ul, .answer-box ol { padding-left: 20px; }
+    .answer-box pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 10px;
+      overflow-x: auto;
+      border: none;
+      margin: 8px 0;
+    }
+    .answer-box pre code { background: none; padding: 0; color: inherit; }
+    .answer-box p { margin: 6px 0; }
   </style>
 </head>
 <body>
   <h1>ContextLens</h1>
-  <p class="muted">Local repo + Swagger assistant with role-aware answers. No API key needed.</p>
+  <p class="muted">Local code + docs assistant using Ollama and Qdrant. No API key needed.</p>
 
   <div class="card">
-    <h3>Index local repo</h3>
-    <div class="small">Enter the absolute path to your local repo. Example: <code>/Users/you/projects/myrepo</code></div>
-    <label for="repoPath">Repo path</label>
-    <input id="repoPath" placeholder="/Users/you/projects/myrepo" />
-    <button onclick="indexRepo()">Index Repo</button>
-    <pre id="repoStatus">Not indexed yet.</pre>
+    <h3>Repositories</h3>
+    <div class="small">Add one or more repo paths. Each one is indexed and searched together.</div>
+    <div id="repoList" class="repo-list"></div>
+
+    <div class="actions">
+      <button onclick="addRepoCard()">+ Add Repository</button>
+      <button id="btnIndexRepos" onclick="indexAllRepos()">Index All Repositories</button>
+      <button id="btnReset" class="danger" onclick="resetAll()">Reset All Data</button>
+    </div>
+
+    <pre id="repoStatus">No repositories indexed yet.</pre>
   </div>
 
   <div class="card">
     <h3>Index Swagger/OpenAPI</h3>
     <div class="small">Upload a <code>.yaml</code>, <code>.yml</code>, or <code>.json</code> file.</div>
-    <label for="swaggerFile">Swagger file</label>
-    <input id="swaggerFile" type="file" accept=".yaml,.yml,.json,.txt" />
-    <button onclick="indexSwagger()">Index Swagger</button>
+    <div>
+      <label for="swaggerFile">Swagger file</label>
+      <input id="swaggerFile" type="file" accept=".yaml,.yml,.json,.txt" />
+    </div>
+    <button id="btnIndexSwagger" onclick="indexSwagger()">Index Swagger</button>
     <pre id="swaggerStatus">No Swagger file indexed yet.</pre>
   </div>
 
   <div class="card">
     <h3>Ask a question</h3>
+
     <div class="row">
       <div>
         <label for="role">Role</label>
         <select id="role">
           <option>Business</option>
           <option>Product Manager</option>
-          <option>Developer</option>
-          <option>Tester</option>
+          <option selected>Developer</option>
         </select>
       </div>
       <div>
@@ -105,32 +179,128 @@
         <input id="question" placeholder="Is this scenario possible in our app?" />
       </div>
     </div>
-    <button onclick="ask()">Ask</button>
+
+    <button id="btnAsk" onclick="ask()">Ask</button>
 
     <label>Answer</label>
-    <pre id="answer">Waiting for a question...</pre>
+    <div id="answer" class="answer-box">Waiting for a question...</div>
 
     <label>Sources</label>
     <pre id="sources">No sources yet.</pre>
   </div>
 
   <script>
-    async function indexRepo() {
-      const path = document.getElementById("repoPath").value.trim();
+    async function resetAll() {
+      if (!confirm("This will delete ALL indexed data from memory and Qdrant. Continue?")) return;
+      setLoading("btnReset", true, "Reset All Data");
+      try {
+        const res = await fetch("/index/reset", { method: "DELETE" });
+        const data = await res.json();
+        document.getElementById("repoStatus").textContent = data.message || JSON.stringify(data);
+        document.getElementById("swaggerStatus").textContent = "No Swagger file indexed yet.";
+        document.getElementById("answer").innerHTML = "Waiting for a question...";
+        document.getElementById("sources").textContent = "No sources yet.";
+      } catch (err) {
+        document.getElementById("repoStatus").textContent = "Error: " + err.message;
+      } finally {
+        setLoading("btnReset", false, "Reset All Data");
+      }
+    }
+
+    function setLoading(btnId, loading, label) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.disabled = loading;
+      if (label) btn.textContent = loading ? label + "..." : label;
+    }
+
+    function addRepoCard() {
+      const repoList = document.getElementById("repoList");
+      const card = document.createElement("div");
+      card.className = "repo-item";
+      card.innerHTML = `
+        <div style="display:flex;gap:10px;align-items:flex-end;">
+          <div style="flex:2;">
+            <label>Repo path</label>
+            <input class="repoPath" placeholder="/Users/you/projects/myrepo" />
+          </div>
+          <div style="flex:1;">
+            <label>Repo name</label>
+            <input class="repoName" placeholder="atlas-backend" />
+          </div>
+          <div style="flex:1;">
+            <label>Tag</label>
+            <select class="repoTag">
+              <option value="">—</option>
+              <option value="backend">Backend</option>
+              <option value="frontend">Frontend</option>
+              <option value="api-docs">API Docs</option>
+              <option value="shared">Shared</option>
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button class="inline-btn danger" onclick="removeRepoCard(this)">Remove</button>
+          </div>
+        </div>
+      `;
+      repoList.appendChild(card);
+      updateRemoveButtons();
+    }
+
+    function removeRepoCard(btn) {
+      btn.closest(".repo-item").remove();
+      updateRemoveButtons();
+    }
+
+    function updateRemoveButtons() {
+      const items = document.querySelectorAll(".repo-item");
+      items.forEach(item => {
+        const removeBtn = item.querySelector(".inline-btn.danger");
+        if (removeBtn) removeBtn.style.display = items.length > 1 ? "" : "none";
+      });
+    }
+
+    async function indexRepoItem(item) {
+      const path = item.querySelector(".repoPath").value.trim();
+      const repo_name = item.querySelector(".repoName").value.trim();
+      const tag = item.querySelector(".repoTag").value;
+
       if (!path) {
-        alert("Enter a repo path");
-        return;
+        throw new Error("One repo path is empty");
       }
 
-      document.getElementById("repoStatus").textContent = "Indexing...";
       const res = await fetch("/index/repo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path })
+        body: JSON.stringify({ path, repo_name, tag })
       });
 
-      const data = await res.json();
-      document.getElementById("repoStatus").textContent = JSON.stringify(data, null, 2);
+      return await res.json();
+    }
+
+    async function indexAllRepos() {
+      const items = document.querySelectorAll(".repo-item");
+      if (!items.length) {
+        alert("Add at least one repository");
+        return;
+      }
+
+      const results = [];
+      document.getElementById("repoStatus").textContent = "Indexing...";
+      setLoading("btnIndexRepos", true, "Index All Repositories");
+
+      try {
+        for (const item of items) {
+          const result = await indexRepoItem(item);
+          results.push(result);
+        }
+        document.getElementById("repoStatus").textContent = JSON.stringify(results, null, 2);
+      } catch (err) {
+        document.getElementById("repoStatus").textContent = "Error: " + err.message;
+      } finally {
+        setLoading("btnIndexRepos", false, "Index All Repositories");
+      }
     }
 
     async function indexSwagger() {
@@ -144,13 +314,21 @@
       form.append("file", fileInput.files[0]);
 
       document.getElementById("swaggerStatus").textContent = "Indexing...";
-      const res = await fetch("/index/swagger", {
-        method: "POST",
-        body: form
-      });
+      setLoading("btnIndexSwagger", true, "Index Swagger");
 
-      const data = await res.json();
-      document.getElementById("swaggerStatus").textContent = JSON.stringify(data, null, 2);
+      try {
+        const res = await fetch("/index/swagger", {
+          method: "POST",
+          body: form
+        });
+
+        const data = await res.json();
+        document.getElementById("swaggerStatus").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("swaggerStatus").textContent = "Error: " + err.message;
+      } finally {
+        setLoading("btnIndexSwagger", false, "Index Swagger");
+      }
     }
 
     async function ask() {
@@ -162,18 +340,28 @@
         return;
       }
 
-      document.getElementById("answer").textContent = "Thinking...";
+      document.getElementById("answer").innerHTML = "Thinking...";
+      document.getElementById("sources").textContent = "Searching...";
+      setLoading("btnAsk", true, "Ask");
 
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, question })
-      });
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role, question })
+        });
 
-      const data = await res.json();
-      document.getElementById("answer").textContent = data.answer || "";
-      document.getElementById("sources").textContent = JSON.stringify(data.sources || [], null, 2);
+        const data = await res.json();
+        document.getElementById("answer").innerHTML = marked.parse(data.answer || "");
+        document.getElementById("sources").textContent = JSON.stringify(data.sources || [], null, 2);
+      } catch (err) {
+        document.getElementById("answer").innerHTML = "Error: " + err.message;
+      } finally {
+        setLoading("btnAsk", false, "Ask");
+      }
     }
+
+    addRepoCard();
   </script>
 </body>
 </html>
