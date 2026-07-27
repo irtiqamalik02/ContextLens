@@ -48,6 +48,7 @@ class ChatRequest(BaseModel):
     role: str
     question: str
     history: list[HistoryItem] = []
+    workspace_context: str = ""
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -123,7 +124,7 @@ async def api_chat(req: ChatRequest):
     try:
         sources = await retrieve(req.question, top_k=10)
         history_dicts = [{"role": h.role, "content": h.content} for h in req.history]
-        messages = build_messages(req.role, req.question, sources, history=history_dicts)
+        messages = build_messages(req.role, req.question, sources, history=history_dicts, workspace_context=req.workspace_context)
         answer = await ollama_chat(messages)
 
         return {

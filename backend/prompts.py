@@ -35,27 +35,42 @@ def role_instruction(role: str) -> str:
             "- NEVER say 'Reference 1', 'Source 2', 'according to Reference X', or cite any reference/source by number.\n"
             "- Instead say 'as per the codebase' or 'the system currently' when referencing evidence.\n"
             "- NEVER include code snippets, code blocks, file paths, class names, function names, or line numbers.\n"
-            "- Refer to modules and services by logical names only (e.g. 'User Management service').\n\n"
+            "- Refer to modules and services by logical names only (e.g. 'User Management service').\n"
+            "- Keep your answer concise — aim for 250 words or fewer.\n\n"
             "ANSWER STRUCTURE:\n"
-            "If the question is about an EXISTING feature or how things work today:\n"
+            "Always start with a one-line summary that directly answers the question.\n\n"
+            "Always include these sections when relevant information is available:\n"
             "  ## Current State\n"
             "  What the system does today regarding this question. Describe the logic in layman terms.\n"
             "  ## Affected Services\n"
             "  Which modules or services are involved. Keep this brief.\n\n"
             "If the question is about IMPLEMENTING A NEW FEATURE, also include:\n"
-            "  Start with a feasibility verdict: Feasible / Partially feasible / Not feasible.\n"
+            "  A feasibility verdict right after the summary: Feasible / Partially feasible / Not feasible.\n"
             "  ## Scope\n"
             "  What needs to change vs. what can be reused.\n"
             "  ## Dependencies\n"
             "  Upstream/downstream services, data dependencies, or team dependencies.\n"
             "  ## Acceptance Criteria\n"
             "  What 'done' looks like, written as user stories or clear success conditions.\n"
-            "  ## NFRs\n"
-            "  Non-functional requirements or risks.\n"
+            "  ## Non-Functional Requirements\n"
+            "  Performance, security, scalability risks, or other non-functional concerns.\n"
             "  ## Effort\n"
             "  Estimate: Small / Medium / Large.\n\n"
+            "If the question covers BOTH an existing feature AND a new change, include all applicable sections above.\n\n"
             "IMPORTANT: Only include a section if you have meaningful content for it. "
-            "If you have nothing concrete to say for a section (e.g. no dependencies identified, no NFRs found), skip that section entirely. Do NOT show empty or 'None' sections.\n"
+            "If you have nothing concrete to say for a section (e.g. no dependencies identified), skip that section entirely. Do NOT show empty or 'None' sections.\n\n"
+            "End with: 'Let me know if you need further breakdown or have follow-up questions.'\n\n"
+            "EXAMPLE of a good answer:\n"
+            "The system currently supports role-based access with three permission levels.\n\n"
+            "## Current State\n"
+            "Access control is handled through a central Authorization service. Each user is assigned a role "
+            "(Admin, Editor, Viewer) and permissions are checked on every action. Admins can manage users, "
+            "Editors can modify content, and Viewers have read-only access.\n\n"
+            "## Affected Services\n"
+            "Authorization service, User Management service.\n\n"
+            "Let me know if you need further breakdown or have follow-up questions.\n\n"
+            "EXAMPLE of a BAD answer (never do this):\n"
+            "The RoleGuard middleware in auth/rbac.py checks req.user.role against the PERMISSIONS dict... (THIS IS FORBIDDEN)\n"
         )
 
     if r in {"developer", "dev", "software developer"}:
@@ -91,6 +106,7 @@ def build_messages(
     question: str,
     sources: List[Dict[str, Any]],
     history: List[Dict[str, str]] | None = None,
+    workspace_context: str = "",
 ) -> List[Dict[str, str]]:
     non_technical = _is_non_technical_role(role)
 
@@ -116,8 +132,16 @@ def build_messages(
 
     source_block = "\n\n".join(source_block_parts) if source_block_parts else "No sources found."
 
+    workspace_block = ""
+    if workspace_context and workspace_context.strip():
+        workspace_block = (
+            "Project context (use this to understand how the repositories relate to each other):\n"
+            f"{workspace_context.strip()}\n\n"
+        )
+
     system = (
         "You are ContextLens, an internal codebase assistant.\n\n"
+        f"{workspace_block}"
         "Core rules:\n"
         "- Base your answer on the provided sources. Do not invent features or capabilities not shown in the sources.\n"
         "- If the sources contain relevant evidence, treat it as fact and answer confidently.\n"

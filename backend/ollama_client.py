@@ -19,7 +19,7 @@ async def ollama_embed(text: str) -> List[float]:
     return data["embedding"]
 
 
-async def ollama_embed_batch(texts: List[str], concurrency: int = 5) -> List[List[float]]:
+async def ollama_embed_batch(texts: List[str], concurrency: int = 10) -> List[List[float]]:
     semaphore = asyncio.Semaphore(concurrency)
 
     async def _embed(text: str) -> List[float]:

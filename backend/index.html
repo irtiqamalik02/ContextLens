@@ -226,6 +226,24 @@
       padding: 40px 0;
       font-size: 14px;
     }
+    .workspace-details {
+      margin-bottom: 10px;
+      border: 1px solid #e6e6e6;
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #fafafa;
+    }
+    .workspace-details summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      color: #555;
+      user-select: none;
+    }
+    .workspace-details textarea {
+      min-height: 80px;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -275,6 +293,12 @@
   <div class="card">
     <h3>Ask a question</h3>
 
+    <details class="workspace-details">
+      <summary>Workspace context (optional)</summary>
+      <div class="small" style="margin:6px 0 4px;">Describe how your repos relate to each other. This helps the LLM give more accurate answers.</div>
+      <textarea id="workspaceContext" rows="4" oninput="localStorage.setItem('workspaceContext', this.value)" placeholder="e.g. This workspace has 3 repos:&#10;- project-backend: Core platform backend with shared business logic&#10;- atlas-backend: Tenant-specific backend for Atlas, depends on project-backend&#10;- web: Common UI serving both project and atlas"></textarea>
+    </details>
+
     <div class="row">
       <div>
         <label for="role">Role</label>
@@ -306,6 +330,8 @@
         const data = await res.json();
         document.getElementById("repoStatus").textContent = data.message || JSON.stringify(data);
         document.getElementById("swaggerStatus").textContent = "No Swagger file indexed yet.";
+        document.getElementById("workspaceContext").value = "";
+        localStorage.removeItem("workspaceContext");
         clearChat();
       } catch (err) {
         document.getElementById("repoStatus").textContent = "Error: " + err.message;
@@ -525,10 +551,11 @@
       btnAsk.disabled = true;
 
       try {
+        const workspace_context = (document.getElementById("workspaceContext").value || "").trim();
         const res = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, question, history: chatHistory })
+          body: JSON.stringify({ role, question, history: chatHistory, workspace_context })
         });
 
         const data = await res.json();
@@ -553,6 +580,9 @@
 
     addRepoCard();
     renderEmptyState();
+
+    const savedCtx = localStorage.getItem('workspaceContext');
+    if (savedCtx) document.getElementById('workspaceContext').value = savedCtx;
   </script>
 </body>
 </html>
