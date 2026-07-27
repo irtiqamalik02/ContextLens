@@ -86,7 +86,12 @@ def _is_non_technical_role(role: str) -> bool:
     return r in {"business", "product manager", "pm"}
 
 
-def build_messages(role: str, question: str, sources: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def build_messages(
+    role: str,
+    question: str,
+    sources: List[Dict[str, Any]],
+    history: List[Dict[str, str]] | None = None,
+) -> List[Dict[str, str]]:
     non_technical = _is_non_technical_role(role)
 
     source_block_parts = []
@@ -116,7 +121,8 @@ def build_messages(role: str, question: str, sources: List[Dict[str, Any]]) -> L
         "Core rules:\n"
         "- Base your answer on the provided sources. Do not invent features or capabilities not shown in the sources.\n"
         "- If the sources contain relevant evidence, treat it as fact and answer confidently.\n"
-        "- Only mention gaps if the question asks about something completely absent from the sources.\n\n"
+        "- Only mention gaps if the question asks about something completely absent from the sources.\n"
+        "- When the user asks a follow-up question, use the conversation history for context but still base facts on the provided sources.\n\n"
         f"{role_instruction(role)}"
     )
 
@@ -126,7 +132,12 @@ def build_messages(role: str, question: str, sources: List[Dict[str, Any]]) -> L
 Relevant sources:
 {source_block}"""
 
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
+    messages = [{"role": "system", "content": system}]
+
+    if history:
+        for msg in history[-10:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+    messages.append({"role": "user", "content": user})
+
+    return messages

@@ -101,3 +101,14 @@ def delete_repo_from_qdrant(repo_root: str):
             must=[FieldCondition(key="repo_root", match=MatchValue(value=repo_root))]
         ),
     )
+
+
+def delete_swagger_from_qdrant(source_name: str):
+    client = get_qdrant()
+    ensure_collection()
+    client.delete(
+        collection_name=config.QDRANT_COLLECTION,
+        points_selector=Filter(
+            must=[FieldCondition(key="swagger_source", match=MatchValue(value=source_name))]
+        ),
+    )

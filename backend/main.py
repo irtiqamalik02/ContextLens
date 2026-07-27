@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from pydantic import BaseModel
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import config
@@ -39,9 +39,15 @@ class IndexRepoRequest(BaseModel):
     tag: str = ""
 
 
+class HistoryItem(BaseModel):
+    role: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     role: str
     question: str
+    history: list[HistoryItem] = []
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -90,11 +96,15 @@ async def api_index_repo(req: IndexRepoRequest):
 
 
 @app.post("/index/swagger")
-async def api_index_swagger(file: UploadFile = File(...)):
+async def api_index_swagger(
+    file: UploadFile = File(...),
+    repo_name: str = Form(""),
+    tag: str = Form(""),
+):
     try:
         content = (await file.read()).decode("utf-8", errors="ignore")
         source_name = file.filename or "swagger"
-        return await index_swagger_text(content, source_name=source_name)
+        return await index_swagger_text(content, source_name=source_name, repo_name=repo_name, tag=tag)
     except httpx.ConnectError:
         return JSONResponse({"ok": False, "message": "Cannot connect to Ollama. Is it running?"}, status_code=502)
     except Exception as e:
@@ -112,7 +122,8 @@ async def api_chat(req: ChatRequest):
 
     try:
         sources = await retrieve(req.question, top_k=10)
-        messages = build_messages(req.role, req.question, sources)
+        history_dicts = [{"role": h.role, "content": h.content} for h in req.history]
+        messages = build_messages(req.role, req.question, sources, history=history_dicts)
         answer = await ollama_chat(messages)
 
         return {
