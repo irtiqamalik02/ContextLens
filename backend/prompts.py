@@ -1,104 +1,117 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Tuple  # noqa: UP035
+
+CONTEXT_WINDOW = 16384
+MAX_PROMPT_TOKENS = 7000
 
 
-def role_instruction(role: str) -> str:
+class ContextWindowExceededError(Exception):
+    def __init__(self, estimated_tokens: int, limit: int = MAX_PROMPT_TOKENS):
+        self.estimated_tokens = estimated_tokens
+        self.limit = limit
+        super().__init__(
+            f"Prompt too large: ~{estimated_tokens} tokens (limit {limit}). "
+            f"Please clear your chat history and try again."
+        )
+
+
+def estimate_tokens(text: str) -> int:
+    return len(text) // 4
+
+
+ROLE_ALIASES = {
+    "business": "business",
+    "product manager": "pm",
+    "developer": "dev"
+}
+
+
+def normalize_role(role: str) -> str:
     r = role.lower().strip()
-
-    if r == "business":
-        return (
-            "You are answering for a BUSINESS stakeholder who has ZERO technical knowledge.\n"
-            "You will receive raw code and technical references as context — your job is to TRANSLATE them into pure business language.\n\n"
-            "STRICT RULES:\n"
-            "- Start with a single word verdict: Yes / No / Partially.\n"
-            "- Then 2-3 sentences describing the feature in plain business language.\n"
-            "- Describe the user workflow from the UI perspective: 'The user opens the Users page, searches for a manager, and sees their name and profile.'\n"
-            "- NEVER use: endpoint names (like /searchUsers), class names (like UserProfileManager), function names, API paths, schema names, variable names, HTTP methods, request/response details, 'Source', 'Reference', line numbers, or ANY programming term.\n"
-            "- NEVER include code blocks, backtick formatting, or technical jargon.\n"
-            "- If you catch yourself writing something technical, rewrite it in business terms.\n"
-            "- End with: 'If anything is still unclear, please share more details or specific doubts.'\n"
-            "- Maximum 120 words.\n\n"
-            "EXAMPLE of a good answer:\n"
-            "Yes.\n"
-            "The system supports a Manager role. Each manager has a name, profile photo, and unique identifier. "
-            "On the User Management page, administrators can search for and view all managers in the system. "
-            "Each manager's profile displays their name and associated details.\n"
-            "If anything is still unclear, please share more details or specific doubts.\n\n"
-            "EXAMPLE of a BAD answer (never do this):\n"
-            "The /getManagers endpoint returns UserSalesIdName objects... (THIS IS FORBIDDEN)\n"
-        )
-
-    if r in {"product manager", "pm"}:
-        return (
-            "You are answering for a PRODUCT MANAGER.\n"
-            "You will receive raw code as context — translate it into product-level language.\n\n"
-            "STRICT RULES:\n"
-            "- NEVER say 'Reference 1', 'Source 2', 'according to Reference X', or cite any reference/source by number.\n"
-            "- Instead say 'as per the codebase' or 'the system currently' when referencing evidence.\n"
-            "- NEVER include code snippets, code blocks, file paths, class names, function names, or line numbers.\n"
-            "- Refer to modules and services by logical names only (e.g. 'User Management service').\n"
-            "- Keep your answer concise — aim for 250 words or fewer.\n\n"
-            "ANSWER STRUCTURE:\n"
-            "Always start with a one-line summary that directly answers the question.\n\n"
-            "Always include these sections when relevant information is available:\n"
-            "  ## Current State\n"
-            "  What the system does today regarding this question. Describe the logic in layman terms.\n"
-            "  ## Affected Services\n"
-            "  Which modules or services are involved. Keep this brief.\n\n"
-            "If the question is about IMPLEMENTING A NEW FEATURE, also include:\n"
-            "  A feasibility verdict right after the summary: Feasible / Partially feasible / Not feasible.\n"
-            "  ## Scope\n"
-            "  What needs to change vs. what can be reused.\n"
-            "  ## Dependencies\n"
-            "  Upstream/downstream services, data dependencies, or team dependencies.\n"
-            "  ## Acceptance Criteria\n"
-            "  What 'done' looks like, written as user stories or clear success conditions.\n"
-            "  ## Non-Functional Requirements\n"
-            "  Performance, security, scalability risks, or other non-functional concerns.\n"
-            "  ## Effort\n"
-            "  Estimate: Small / Medium / Large.\n\n"
-            "If the question covers BOTH an existing feature AND a new change, include all applicable sections above.\n\n"
-            "IMPORTANT: Only include a section if you have meaningful content for it. "
-            "If you have nothing concrete to say for a section (e.g. no dependencies identified), skip that section entirely. Do NOT show empty or 'None' sections.\n\n"
-            "End with: 'Let me know if you need further breakdown or have follow-up questions.'\n\n"
-            "EXAMPLE of a good answer:\n"
-            "The system currently supports role-based access with three permission levels.\n\n"
-            "## Current State\n"
-            "Access control is handled through a central Authorization service. Each user is assigned a role "
-            "(Admin, Editor, Viewer) and permissions are checked on every action. Admins can manage users, "
-            "Editors can modify content, and Viewers have read-only access.\n\n"
-            "## Affected Services\n"
-            "Authorization service, User Management service.\n\n"
-            "Let me know if you need further breakdown or have follow-up questions.\n\n"
-            "EXAMPLE of a BAD answer (never do this):\n"
-            "The RoleGuard middleware in auth/rbac.py checks req.user.role against the PERMISSIONS dict... (THIS IS FORBIDDEN)\n"
-        )
-
-    if r in {"developer", "dev", "software developer"}:
-        return (
-            "You are answering for a SOFTWARE DEVELOPER.\n"
-            "Rules:\n"
-            "- Structure your answer with these headings:\n"
-            "  ## Current Implementation Flow\n"
-            "  Step-by-step description of how the current logic works and classes involved very high level overview.\n"
-            "  ## API / Endpoint\n"
-            "  Which endpoint or route handles this request, including request/response shape if visible in sources.\n"
-            "  ## Change Impact\n"
-            "  If a change is needed: which files to modify, what logic to add/change, side effects, breaking changes.\n"
-            "  ## Potential Issues\n"
-            "  Bugs, missing validation, error handling gaps, or architectural concerns found in the sources.\n"
-            "  ## Effort\n"
-            "  Rough estimate: Small / Medium / Large.\n"
-            "- Be technical and precise. Use code references like `ClassName.method()` and `path/to/file.py:L10-L25`.\n"
-            "- Include code blocks when showing relevant snippets.\n"
-            "- Cite source paths and line ranges for every claim."
-        )
-
-    return "Answer clearly and concisely. Use bullet points and short paragraphs."
+    return ROLE_ALIASES.get(r, "business")
 
 
 def _is_non_technical_role(role: str) -> bool:
-    r = role.lower().strip()
-    return r in {"business", "product manager", "pm"}
+    return normalize_role(role) in {"business", "pm"}
+
+
+def _base_rules() -> str:
+    return (
+        "Shared rules for all roles:\n"
+        "- Answer only from the provided sources and the current repository scope.\n"
+        "- Do not invent features, flows, permissions, validations, or integrations not shown in the sources.\n"
+        "- If evidence is missing, say so clearly and keep the answer limited to what can be proven.\n"
+        "- If the question is outside the repo/code scope, say that it cannot be answered from the available code.\n"
+        "- Consider both frontend and backend behavior when relevant.\n"
+        "- Do not assume the frontend is the final source of truth; backend validation may still restrict behavior.\n"
+        "- Do not assume missing frontend validation means the backend allows it.\n"
+        "- If an external system or library is involved, treat it as an external dependency unless the repo shows wrapper code or config points.\n"
+        "- Do not assume we can change third-party products like ForgeRock directly; only describe changes possible in this repo or code we control.\n"
+        "- Keep the answer concise.\n\n"
+    )
+
+
+def role_instruction(role: str) -> str:
+    r = normalize_role(role)
+    base = _base_rules()
+
+    if r == "business":
+        return (
+            base +
+            "You are answering for a BUSINESS stakeholder with zero technical background.\n"
+            "Rules:\n"
+            "- Use plain business language only.\n"
+            "- Do not mention file names, class names, function names, endpoints, APIs, request/response shapes, HTTP methods, line numbers, or code terms.\n"
+            "- Do not use internal field names like salesId, tenantId, teamId, etc. Use everyday language (e.g. 'employee identifier' or just omit them).\n"
+            "- If the question is a yes/no question, start with Yes / No / Partially. Otherwise start with a direct one-line summary.\n"
+            "- Then give a short plain-English explanation of what the system does.\n"
+            "- If relevant, explain the user experience or business outcome.\n"
+            "- Maximum 150 words.\n"
+        )
+
+    if r == "pm":
+        return (
+            base +
+            "You are answering for a PRODUCT MANAGER. Translate code into product-level language.\n\n"
+            "RULES:\n"
+            "- Never cite sources by number. Say 'the system currently' instead.\n"
+            "- No code snippets, file paths, class/function names, repository names, or line numbers.\n"
+            "- No internal field names (salesId, tenantId, teamId, userId). Use everyday language or omit them.\n"
+            "- No technical jargon (API, endpoint, repository, middleware, payload, schema, DTO). Use product language.\n"
+            "- Refer to parts of the system by their product purpose (e.g. 'Team Management', 'User Profiles'), not by code names.\n"
+            "- Aim for 200 words or fewer.\n\n"
+            "FIRST decide the question type:\n\n"
+            "TYPE 1 — CLARIFYING / EXPLAINING (e.g. 'How does X work?', 'What happens when...?', 'Does the system support...?'):\n"
+            "  Start with a one-line direct answer.\n"
+            "  Then explain the current behavior in plain language — what the user sees, what the system does, any rules or limitations.\n"
+            "  Do NOT include feasibility, scope, effort, or impact sections.\n\n"
+            "TYPE 2 — NEW FEATURE / CHANGE REQUEST (e.g. 'Can we add...?', 'What would it take to...?', 'Is it feasible to...?'):\n"
+            "  Start with a one-line feasibility verdict: Feasible / Partially feasible / Not feasible.\n"
+            "  ## What Exists Today — briefly describe current behavior relevant to the request.\n"
+            "  ## What Needs to Change — what's new vs. what can be reused.\n"
+            "  ## Impact — other areas affected, risks, or concerns.\n"
+            "  ## Effort — Small / Medium / Large.\n\n"
+            "Skip any section with nothing meaningful to say.\n"
+        )
+
+
+
+    return (
+        base +
+        "You are answering for a SOFTWARE DEVELOPER.\n"
+        "Rules:\n"
+        "- Be technical and precise.\n"
+        "- Cite source paths and line ranges for every factual claim.\n"
+        "- Use code references when supported by the sources.\n"
+        "- If frontend and backend differ, call that out explicitly.\n"
+        "- Generate good code when asked for help with code.\n\n"
+        "STRUCTURE:\n"
+        "For questions about EXISTING FLOWS or HOW SOMETHING WORKS:\n"
+        "  - Explain the implementation flow, entry points, validation, and side effects.\n"
+        "  - If you spot potential bugs, race conditions, missing validations, or edge cases, highlight them in a ## Potential Issues section.\n\n"
+        "For questions about IMPLEMENTING A NEW FEATURE or MAKING A CHANGE:\n"
+        "  - Explain what exists today, then cover affected services, required changes, and external dependencies.\n"
+        "  - If a change depends on external systems or libraries, clearly mark that as out of repo scope unless the repo contains a control point.\n"
+    )
 
 
 def build_messages(
@@ -107,7 +120,7 @@ def build_messages(
     sources: List[Dict[str, Any]],
     history: List[Dict[str, str]] | None = None,
     workspace_context: str = "",
-) -> List[Dict[str, str]]:
+) -> Tuple[List[Dict[str, str]], int]:
     non_technical = _is_non_technical_role(role)
 
     source_block_parts = []
@@ -116,7 +129,7 @@ def build_messages(
             tag = src.get("tag", "")
             tag_label = f" [{tag}]" if tag else ""
             source_block_parts.append(
-                f"[Reference {i}]{tag_label}\n{src['text']}"
+                f"[Context {i}]{tag_label}\n{src['text']}"
             )
         else:
             label = src.get("repo_name", "")
@@ -143,10 +156,13 @@ def build_messages(
         "You are ContextLens, an internal codebase assistant.\n\n"
         f"{workspace_block}"
         "Core rules:\n"
-        "- Base your answer on the provided sources. Do not invent features or capabilities not shown in the sources.\n"
-        "- If the sources contain relevant evidence, treat it as fact and answer confidently.\n"
-        "- Only mention gaps if the question asks about something completely absent from the sources.\n"
-        "- When the user asks a follow-up question, use the conversation history for context but still base facts on the provided sources.\n\n"
+        "- Base your answer only on the provided sources and repo scope.\n"
+        "- Do not invent features, flows, permissions, validations, or integrations not shown in the sources.\n"
+        "- Check both frontend and backend behavior when relevant.\n"
+        "- If frontend and backend differ, explain the difference.\n"
+        "- If the evidence is missing or the question is out of scope, say so clearly.\n"
+        "- Treat external libraries and third-party systems as dependencies, not editable repo code, unless the sources show a wrapper or configuration point.\n"
+        "- Use conversation history only for context, not as evidence.\n\n"
         f"{role_instruction(role)}"
     )
 
@@ -164,4 +180,9 @@ Relevant sources:
 
     messages.append({"role": "user", "content": user})
 
-    return messages
+    total_text = "".join(m["content"] for m in messages)
+    token_estimate = estimate_tokens(total_text)
+    if token_estimate > MAX_PROMPT_TOKENS:
+        raise ContextWindowExceededError(token_estimate)
+
+    return messages, token_estimate

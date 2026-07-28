@@ -35,8 +35,10 @@ async def ollama_chat(messages: List[Dict[str, str]]) -> str:
         "messages": messages,
         "stream": False,
         "options": {
-            "temperature": 0.2,
-            "num_ctx": 8192,
+            "temperature": 0.1,
+            "num_ctx": 16384,
+            "top_p": 0.9,
+            "repeat_penalty": 1.1,
         },
     })
     return data["message"]["content"]

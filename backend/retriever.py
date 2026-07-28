@@ -7,7 +7,7 @@ from qdrant_store import search_qdrant
 
 logger = logging.getLogger("contextlens")
 
-QDRANT_CANDIDATE_MULTIPLIER = 2
+QDRANT_CANDIDATE_MULTIPLIER = 3
 
 
 def normalize_tokens(text: str) -> List[str]:

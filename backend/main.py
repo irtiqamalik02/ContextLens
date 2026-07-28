@@ -12,7 +12,7 @@ from qdrant_store import load_docs_from_qdrant, get_qdrant, clear_all_from_qdran
 from ollama_client import ollama_chat
 from indexer import index_repo, index_swagger_text
 from retriever import retrieve
-from prompts import build_messages
+from prompts import build_messages, ContextWindowExceededError, CONTEXT_WINDOW
 
 logger = logging.getLogger("contextlens")
 
@@ -122,9 +122,9 @@ async def api_chat(req: ChatRequest):
         }
 
     try:
-        sources = await retrieve(req.question, top_k=10)
+        sources = await retrieve(req.question, top_k=6)
         history_dicts = [{"role": h.role, "content": h.content} for h in req.history]
-        messages = build_messages(req.role, req.question, sources, history=history_dicts, workspace_context=req.workspace_context)
+        messages, token_estimate = build_messages(req.role, req.question, sources, history=history_dicts, workspace_context=req.workspace_context)
         answer = await ollama_chat(messages)
 
         return {
@@ -136,8 +136,21 @@ async def api_chat(req: ChatRequest):
                     "score": round(float(s["score"]), 4)
                 }
                 for s in sources
-            ]
+            ],
+            "token_usage": {
+                "prompt_tokens": token_estimate,
+                "limit": CONTEXT_WINDOW,
+            },
         }
+    except ContextWindowExceededError as e:
+        return JSONResponse(
+            {
+                "answer": str(e),
+                "sources": [],
+                "error_type": "context_window_exceeded",
+            },
+            status_code=413,
+        )
     except httpx.ConnectError:
         return JSONResponse({"answer": "Cannot connect to Ollama. Is it running?", "sources": []}, status_code=502)
     except Exception as e:

@@ -244,6 +244,62 @@
       min-height: 80px;
       font-size: 13px;
     }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #555;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      appearance: none;
+      -webkit-appearance: none;
+      background: #ccc;
+      border-radius: 10px;
+      outline: none;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: none;
+      padding: 0;
+      margin: 0;
+      flex-shrink: 0;
+    }
+    .toggle-switch:checked { background: #34a853; }
+    .toggle-switch::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle-switch:checked::before { transform: translateX(16px); }
+    .ctx-meter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #999;
+    }
+    .ctx-meter-bar {
+      flex: 1;
+      height: 5px;
+      background: #e8e8e8;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .ctx-meter-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s, background 0.3s;
+    }
   </style>
 </head>
 <body>
@@ -308,7 +364,11 @@
           <option selected>Developer</option>
         </select>
       </div>
-      <div style="display:flex;align-items:flex-end;gap:8px;">
+      <div style="display:flex;align-items:flex-end;gap:12px;">
+        <div class="toggle-row">
+          <input type="checkbox" id="memoryToggle" class="toggle-switch" checked />
+          <label for="memoryToggle" style="font-weight:normal;margin:0;cursor:pointer;">Memory</label>
+        </div>
         <button onclick="clearChat()" style="width:auto;padding:8px 14px;margin-top:0;background:#b42318;font-size:13px;">Clear Chat</button>
       </div>
     </div>
@@ -318,6 +378,11 @@
     <div class="chat-input-row">
       <input id="question" placeholder="Ask a question..." onkeydown="if(event.key==='Enter')ask()" />
       <button id="btnAsk" onclick="ask()">Send</button>
+    </div>
+    <div class="ctx-meter" id="ctxMeter" style="display:none;">
+      <span>ctx</span>
+      <div class="ctx-meter-bar"><div class="ctx-meter-fill" id="ctxFill"></div></div>
+      <span id="ctxLabel"></span>
     </div>
   </div>
 
@@ -535,6 +600,18 @@
     function clearChat() {
       chatHistory = [];
       renderEmptyState();
+      document.getElementById('ctxMeter').style.display = 'none';
+    }
+
+    function updateCtxMeter(usage) {
+      const meter = document.getElementById('ctxMeter');
+      const fill = document.getElementById('ctxFill');
+      const label = document.getElementById('ctxLabel');
+      const pct = Math.min(100, Math.round((usage.prompt_tokens / usage.limit) * 100));
+      meter.style.display = 'flex';
+      fill.style.width = pct + '%';
+      fill.style.background = pct < 60 ? '#34a853' : pct < 85 ? '#f5a623' : '#d93025';
+      label.textContent = `${usage.prompt_tokens} / ${usage.limit} tokens (${pct}%)`;
     }
 
     async function ask() {
@@ -552,20 +629,31 @@
 
       try {
         const workspace_context = (document.getElementById("workspaceContext").value || "").trim();
+        const memoryOn = document.getElementById('memoryToggle').checked;
         const res = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, question, history: chatHistory, workspace_context })
+          body: JSON.stringify({ role, question, history: memoryOn ? chatHistory : [], workspace_context })
         });
 
         const data = await res.json();
         removeThinkingBubble();
+
+        if (data.error_type === "context_window_exceeded") {
+          addAssistantBubble(
+            "**Context window exceeded.** Your conversation history is too long for the model to process.\n\nPlease click **Clear Chat** and try your question again.",
+            [], role
+          );
+          return;
+        }
 
         const answer = data.answer || "No answer received.";
         addAssistantBubble(answer, data.sources, role);
 
         chatHistory.push({ role: "user", content: question });
         chatHistory.push({ role: "assistant", content: answer });
+
+        if (data.token_usage) updateCtxMeter(data.token_usage);
 
         if (chatHistory.length > 20) {
           chatHistory = chatHistory.slice(-20);
