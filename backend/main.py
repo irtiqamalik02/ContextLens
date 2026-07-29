@@ -156,7 +156,7 @@ async def api_chat(req: ChatRequest):
             {
                 "answer": "Ollama response timed out. The model may be overloaded or the prompt is too large. Please clear your chat history and try again with a simpler question.",
                 "sources": [],
-                "error_type": "timeout",
+                "error_type": "ollama timeout",
             },
             status_code=504,
         )
