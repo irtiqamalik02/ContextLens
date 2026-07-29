@@ -151,6 +151,15 @@ async def api_chat(req: ChatRequest):
             },
             status_code=413,
         )
+    except httpx.ReadTimeout:
+        return JSONResponse(
+            {
+                "answer": "Ollama response timed out. The model may be overloaded or the prompt is too large. Please clear your chat history and try again with a simpler question.",
+                "sources": [],
+                "error_type": "timeout",
+            },
+            status_code=504,
+        )
     except httpx.ConnectError:
         return JSONResponse({"answer": "Cannot connect to Ollama. Is it running?", "sources": []}, status_code=502)
     except Exception as e:
