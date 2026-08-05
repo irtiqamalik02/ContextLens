@@ -8,6 +8,7 @@ import yaml
 import config
 from ollama_client import ollama_embed_batch
 from qdrant_store import upsert_to_qdrant, delete_repo_from_qdrant, delete_swagger_from_qdrant
+from ast_chunker import chunk_by_ast, is_ast_supported
 
 
 def file_hash(path: Path) -> str:
@@ -84,7 +85,11 @@ async def index_repo(repo_path: str, repo_name: str = "", tag: str = "") -> Dict
             continue
 
         file_count += 1
-        chunks = chunk_by_lines(content)
+        ext = path.suffix.lower()
+        if is_ast_supported(ext):
+            chunks = chunk_by_ast(content, ext)
+        if not is_ast_supported(ext) or not chunks:
+            chunks = chunk_by_lines(content)
         chunk_texts = [ct for _, _, ct in chunks]
         embeddings = await ollama_embed_batch(chunk_texts)
         new_docs = []

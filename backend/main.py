@@ -123,6 +123,11 @@ async def api_chat(req: ChatRequest):
 
     try:
         sources = await retrieve(req.question, top_k=6)
+        if not sources:
+            return {
+                "answer": "I couldn't find relevant code to answer this question. Try rephrasing or ensure the relevant repo is indexed.",
+                "sources": [],
+            }
         history_dicts = [{"role": h.role, "content": h.content} for h in req.history]
         messages, token_estimate = build_messages(req.role, req.question, sources, history=history_dicts, workspace_context=req.workspace_context)
         answer = await ollama_chat(messages)

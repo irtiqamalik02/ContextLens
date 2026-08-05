@@ -5,3 +5,9 @@ python-dotenv
 python-multipart
 pyyaml
 qdrant-client
+tree-sitter
+tree-sitter-python
+tree-sitter-javascript
+tree-sitter-typescript
+tree-sitter-java
+tree-sitter-kotlin

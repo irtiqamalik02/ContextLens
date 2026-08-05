@@ -35,3 +35,7 @@ ALLOWED_EXTS = {
 }
 
 MAX_FILE_BYTES = 600_000
+
+AST_SUPPORTED_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".kt"}
+AST_MAX_CHUNK_LINES = 80
+AST_MIN_CHUNK_LINES = 5

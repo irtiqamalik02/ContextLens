@@ -8,6 +8,8 @@ from qdrant_store import search_qdrant
 logger = logging.getLogger("contextlens")
 
 QDRANT_CANDIDATE_MULTIPLIER = 3
+MIN_SCORE_THRESHOLD = 0.25
+SCORE_DROP_RATIO = 0.6
 
 
 def normalize_tokens(text: str) -> List[str]:
@@ -35,4 +37,19 @@ async def retrieve(question: str, top_k: int = 10) -> List[Dict[str, Any]]:
         doc["score"] = (0.75 * semantic) + (0.25 * lexical)
 
     candidates.sort(key=lambda x: x["score"], reverse=True)
-    return candidates[:top_k]
+
+    best_score = candidates[0]["score"]
+    score_floor = max(MIN_SCORE_THRESHOLD, best_score * SCORE_DROP_RATIO)
+
+    filtered = []
+    for doc in candidates[:top_k]:
+        if doc["score"] < score_floor:
+            break
+        filtered.append(doc)
+
+    logger.info(
+        f"[retrieve] top_k={top_k}, candidates={len(candidates)}, "
+        f"best={best_score:.4f}, floor={score_floor:.4f}, returned={len(filtered)}"
+    )
+
+    return filtered
