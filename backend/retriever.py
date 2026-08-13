@@ -17,10 +17,32 @@ def normalize_tokens(text: str) -> List[str]:
     return [t for t in tokens if len(t) >= 3]
 
 
-async def retrieve(question: str, top_k: int = 10) -> List[Dict[str, Any]]:
+async def retrieve(
+    question: str, 
+    top_k: int = 10,
+    repo_names: List[str] = None,
+    tags: List[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve relevant documents for a question with optional filtering.
+    
+    Args:
+        question: The user's question
+        top_k: Number of final results to return
+        repo_names: Optional list of repo names to filter by
+        tags: Optional list of tags to filter by
+    
+    Returns:
+        List of relevant documents with hybrid scores
+    """
     q_emb = await ollama_embed(question)
 
-    candidates = search_qdrant(q_emb, top_k=top_k * QDRANT_CANDIDATE_MULTIPLIER)
+    candidates = search_qdrant(
+        q_emb, 
+        top_k=top_k * QDRANT_CANDIDATE_MULTIPLIER,
+        repo_names=repo_names,
+        tags=tags
+    )
 
     if not candidates:
         return []
