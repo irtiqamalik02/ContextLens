@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ContextLens</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 32px auto;
       padding: 0 16px;
       background: #f6f7fb;
@@ -35,6 +36,7 @@
       border-radius: 10px;
       border: 1px solid #cfcfcf;
       font-size: 14px;
+      background: white;
     }
     textarea { min-height: 110px; resize: vertical; }
     button {
@@ -45,7 +47,11 @@
       cursor: pointer;
       font-weight: 600;
     }
-    button:hover { opacity: 0.92; }
+    button:hover:not(:disabled) { opacity: 0.92; }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     pre {
       white-space: pre-wrap;
       word-break: break-word;
@@ -60,77 +66,439 @@
       grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
-    @media (max-width: 760px) {
+    @media (max-width: 820px) {
       .row { grid-template-columns: 1fr; }
     }
     .small { font-size: 13px; color: #666; }
+    .repo-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .repo-item {
+      border: 1px solid #e8e8e8;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fcfcfc;
+    }
+    .inline-btn {
+      width: auto;
+      padding: 10px 14px;
+      margin-top: 0;
+    }
+    .danger {
+      background: #b42318;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .actions button {
+      width: auto;
+      padding: 10px 14px;
+    }
+    .source-hint {
+      font-size: 12px;
+      color: #777;
+      margin-top: 4px;
+    }
+    code { background: #f1f1f1; padding: 2px 5px; border-radius: 6px; }
+    .answer-box {
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 12px;
+      margin: 8px 0 0;
+      line-height: 1.6;
+    }
+    .answer-box h1, .answer-box h2, .answer-box h3, .answer-box h4 {
+      margin: 12px 0 6px;
+    }
+    .answer-box h1:first-child, .answer-box h2:first-child, .answer-box h3:first-child {
+      margin-top: 0;
+    }
+    .answer-box ul, .answer-box ol { padding-left: 20px; }
+    .answer-box pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 10px;
+      overflow-x: auto;
+      border: none;
+      margin: 8px 0;
+    }
+    .answer-box pre code { background: none; padding: 0; color: inherit; }
+    .answer-box p { margin: 6px 0; }
+    .chat-thread {
+      max-height: 500px;
+      overflow-y: auto;
+      padding: 12px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: #111;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-bubble.assistant {
+      align-self: flex-start;
+      background: #f0f0f0;
+      color: #111;
+      border-bottom-left-radius: 4px;
+    }
+    .chat-bubble.assistant h1, .chat-bubble.assistant h2, .chat-bubble.assistant h3, .chat-bubble.assistant h4 {
+      margin: 10px 0 4px;
+    }
+    .chat-bubble.assistant h1:first-child, .chat-bubble.assistant h2:first-child, .chat-bubble.assistant h3:first-child {
+      margin-top: 0;
+    }
+    .chat-bubble.assistant ul, .chat-bubble.assistant ol { padding-left: 20px; }
+    .chat-bubble.assistant pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 10px;
+      overflow-x: auto;
+      border: none;
+      margin: 8px 0;
+    }
+    .chat-bubble.assistant pre code { background: none; padding: 0; color: inherit; }
+    .chat-bubble.assistant p { margin: 4px 0; }
+    .chat-bubble .role-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .chat-bubble.assistant .role-badge { color: #555; }
+    .chat-bubble .sources-toggle {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #888;
+      cursor: pointer;
+      user-select: none;
+    }
+    .chat-bubble .sources-toggle:hover { color: #333; }
+    .chat-bubble .sources-content {
+      display: none;
+      margin-top: 6px;
+      font-size: 12px;
+      background: #e8e8e8;
+      padding: 8px 10px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .chat-bubble.thinking {
+      align-self: flex-start;
+      background: #f0f0f0;
+      color: #999;
+      font-style: italic;
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .chat-input-row input { flex: 1; margin: 0; }
+    .chat-input-row button {
+      width: auto;
+      margin: 0;
+      padding: 10px 20px;
+      white-space: nowrap;
+    }
+    .chat-empty {
+      text-align: center;
+      color: #999;
+      padding: 40px 0;
+      font-size: 14px;
+    }
+    .workspace-details {
+      margin-bottom: 10px;
+      border: 1px solid #e6e6e6;
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #fafafa;
+    }
+    .workspace-details summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      color: #555;
+      user-select: none;
+    }
+    .workspace-details textarea {
+      min-height: 80px;
+      font-size: 13px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #555;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      appearance: none;
+      -webkit-appearance: none;
+      background: #ccc;
+      border-radius: 10px;
+      outline: none;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: none;
+      padding: 0;
+      margin: 0;
+      flex-shrink: 0;
+    }
+    .toggle-switch:checked { background: #34a853; }
+    .toggle-switch::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle-switch:checked::before { transform: translateX(16px); }
+    .ctx-meter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #999;
+    }
+    .ctx-meter-bar {
+      flex: 1;
+      height: 5px;
+      background: #e8e8e8;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .ctx-meter-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s, background 0.3s;
+    }
   </style>
 </head>
 <body>
   <h1>ContextLens</h1>
-  <p class="muted">Local repo + Swagger assistant with role-aware answers. No API key needed.</p>
+  <p class="muted">Local code + docs assistant using Ollama and Qdrant. No API key needed.</p>
 
   <div class="card">
-    <h3>Index local repo</h3>
-    <div class="small">Enter the absolute path to your local repo. Example: <code>/Users/you/projects/myrepo</code></div>
-    <label for="repoPath">Repo path</label>
-    <input id="repoPath" placeholder="/Users/you/projects/myrepo" />
-    <button onclick="indexRepo()">Index Repo</button>
-    <pre id="repoStatus">Not indexed yet.</pre>
+    <h3>Repositories</h3>
+    <div class="small">Add one or more repo paths. Each one is indexed and searched together.</div>
+    <div id="repoList" class="repo-list"></div>
+
+    <div class="actions">
+      <button onclick="addRepoCard()">+ Add Repository</button>
+      <button id="btnIndexRepos" onclick="indexAllRepos()">Index All Repositories</button>
+      <button id="btnReset" class="danger" onclick="resetAll()">Reset All Data</button>
+    </div>
+
+    <pre id="repoStatus">No repositories indexed yet.</pre>
   </div>
 
   <div class="card">
     <h3>Index Swagger/OpenAPI</h3>
-    <div class="small">Upload a <code>.yaml</code>, <code>.yml</code>, or <code>.json</code> file.</div>
-    <label for="swaggerFile">Swagger file</label>
-    <input id="swaggerFile" type="file" accept=".yaml,.yml,.json,.txt" />
-    <button onclick="indexSwagger()">Index Swagger</button>
+    <div class="small">Upload a <code>.yaml</code>, <code>.yml</code>, or <code>.json</code> file. Each file is chunked by endpoint for better retrieval.</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:2;min-width:200px;">
+        <label for="swaggerFile">Swagger file</label>
+        <input id="swaggerFile" type="file" accept=".yaml,.yml,.json,.txt" />
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <label for="swaggerRepoName">Repo name</label>
+        <input id="swaggerRepoName" placeholder="atlas-backend" />
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label for="swaggerTag">Tag</label>
+        <select id="swaggerTag">
+          <option value="api-docs" selected>API Docs</option>
+          <option value="backend">Backend</option>
+          <option value="frontend">Frontend</option>
+          <option value="shared">Shared</option>
+        </select>
+      </div>
+    </div>
+    <button id="btnIndexSwagger" onclick="indexSwagger()">Index Swagger</button>
     <pre id="swaggerStatus">No Swagger file indexed yet.</pre>
   </div>
 
   <div class="card">
     <h3>Ask a question</h3>
+
+    <details class="workspace-details">
+      <summary>Workspace context (optional)</summary>
+      <div class="small" style="margin:6px 0 4px;">Describe how your repos relate to each other. This helps the LLM give more accurate answers.</div>
+      <textarea id="workspaceContext" rows="4" oninput="localStorage.setItem('workspaceContext', this.value)" placeholder="e.g. This workspace has 3 repos:&#10;- project-backend: Core platform backend with shared business logic&#10;- atlas-backend: Tenant-specific backend for Atlas, depends on project-backend&#10;- web: Common UI serving both project and atlas"></textarea>
+    </details>
+
     <div class="row">
       <div>
         <label for="role">Role</label>
         <select id="role">
           <option>Business</option>
           <option>Product Manager</option>
-          <option>Developer</option>
-          <option>Tester</option>
+          <option selected>Developer</option>
         </select>
       </div>
-      <div>
-        <label for="question">Question</label>
-        <input id="question" placeholder="Is this scenario possible in our app?" />
+      <div style="display:flex;align-items:flex-end;gap:12px;">
+        <div class="toggle-row">
+          <input type="checkbox" id="memoryToggle" class="toggle-switch" checked />
+          <label for="memoryToggle" style="font-weight:normal;margin:0;cursor:pointer;">Memory</label>
+        </div>
+        <button onclick="clearChat()" style="width:auto;padding:8px 14px;margin-top:0;background:#b42318;font-size:13px;">Clear Chat</button>
       </div>
     </div>
-    <button onclick="ask()">Ask</button>
 
-    <label>Answer</label>
-    <pre id="answer">Waiting for a question...</pre>
+    <div id="chatThread" class="chat-thread"></div>
 
-    <label>Sources</label>
-    <pre id="sources">No sources yet.</pre>
+    <div class="chat-input-row">
+      <input id="question" placeholder="Ask a question..." onkeydown="if(event.key==='Enter')ask()" />
+      <button id="btnAsk" onclick="ask()">Send</button>
+    </div>
+    <div class="ctx-meter" id="ctxMeter" style="display:none;">
+      <span>ctx</span>
+      <div class="ctx-meter-bar"><div class="ctx-meter-fill" id="ctxFill"></div></div>
+      <span id="ctxLabel"></span>
+    </div>
   </div>
 
   <script>
-    async function indexRepo() {
-      const path = document.getElementById("repoPath").value.trim();
+    async function resetAll() {
+      if (!confirm("This will delete ALL indexed data from memory and Qdrant. Continue?")) return;
+      setLoading("btnReset", true, "Reset All Data");
+      try {
+        const res = await fetch("/index/reset", { method: "DELETE" });
+        const data = await res.json();
+        document.getElementById("repoStatus").textContent = data.message || JSON.stringify(data);
+        document.getElementById("swaggerStatus").textContent = "No Swagger file indexed yet.";
+        document.getElementById("workspaceContext").value = "";
+        localStorage.removeItem("workspaceContext");
+        clearChat();
+      } catch (err) {
+        document.getElementById("repoStatus").textContent = "Error: " + err.message;
+      } finally {
+        setLoading("btnReset", false, "Reset All Data");
+      }
+    }
+
+    function setLoading(btnId, loading, label) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.disabled = loading;
+      if (label) btn.textContent = loading ? label + "..." : label;
+    }
+
+    function addRepoCard() {
+      const repoList = document.getElementById("repoList");
+      const card = document.createElement("div");
+      card.className = "repo-item";
+      card.innerHTML = `
+        <div style="display:flex;gap:10px;align-items:flex-end;">
+          <div style="flex:2;">
+            <label>Repo path</label>
+            <input class="repoPath" placeholder="/Users/you/projects/myrepo" />
+          </div>
+          <div style="flex:1;">
+            <label>Repo name</label>
+            <input class="repoName" placeholder="atlas-backend" />
+          </div>
+          <div style="flex:1;">
+            <label>Tag</label>
+            <select class="repoTag">
+              <option value="">—</option>
+              <option value="backend">Backend</option>
+              <option value="frontend">Frontend</option>
+              <option value="api-docs">API Docs</option>
+              <option value="shared">Shared</option>
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button class="inline-btn danger" onclick="removeRepoCard(this)">Remove</button>
+          </div>
+        </div>
+      `;
+      repoList.appendChild(card);
+      updateRemoveButtons();
+    }
+
+    function removeRepoCard(btn) {
+      btn.closest(".repo-item").remove();
+      updateRemoveButtons();
+    }
+
+    function updateRemoveButtons() {
+      const items = document.querySelectorAll(".repo-item");
+      items.forEach(item => {
+        const removeBtn = item.querySelector(".inline-btn.danger");
+        if (removeBtn) removeBtn.style.display = items.length > 1 ? "" : "none";
+      });
+    }
+
+    async function indexRepoItem(item) {
+      const path = item.querySelector(".repoPath").value.trim();
+      const repo_name = item.querySelector(".repoName").value.trim();
+      const tag = item.querySelector(".repoTag").value;
+
       if (!path) {
-        alert("Enter a repo path");
-        return;
+        throw new Error("One repo path is empty");
       }
 
-      document.getElementById("repoStatus").textContent = "Indexing...";
       const res = await fetch("/index/repo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path })
+        body: JSON.stringify({ path, repo_name, tag })
       });
 
-      const data = await res.json();
-      document.getElementById("repoStatus").textContent = JSON.stringify(data, null, 2);
+      return await res.json();
+    }
+
+    async function indexAllRepos() {
+      const items = document.querySelectorAll(".repo-item");
+      if (!items.length) {
+        alert("Add at least one repository");
+        return;
+      }
+
+      const results = [];
+      document.getElementById("repoStatus").textContent = "Indexing...";
+      setLoading("btnIndexRepos", true, "Index All Repositories");
+
+      try {
+        for (const item of items) {
+          const result = await indexRepoItem(item);
+          results.push(result);
+        }
+        document.getElementById("repoStatus").textContent = JSON.stringify(results, null, 2);
+      } catch (err) {
+        document.getElementById("repoStatus").textContent = "Error: " + err.message;
+      } finally {
+        setLoading("btnIndexRepos", false, "Index All Repositories");
+      }
     }
 
     async function indexSwagger() {
@@ -142,38 +510,167 @@
 
       const form = new FormData();
       form.append("file", fileInput.files[0]);
+      form.append("repo_name", document.getElementById("swaggerRepoName").value.trim());
+      form.append("tag", document.getElementById("swaggerTag").value);
 
       document.getElementById("swaggerStatus").textContent = "Indexing...";
-      const res = await fetch("/index/swagger", {
-        method: "POST",
-        body: form
-      });
+      setLoading("btnIndexSwagger", true, "Index Swagger");
 
-      const data = await res.json();
-      document.getElementById("swaggerStatus").textContent = JSON.stringify(data, null, 2);
+      try {
+        const res = await fetch("/index/swagger", {
+          method: "POST",
+          body: form
+        });
+
+        const data = await res.json();
+        document.getElementById("swaggerStatus").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("swaggerStatus").textContent = "Error: " + err.message;
+      } finally {
+        setLoading("btnIndexSwagger", false, "Index Swagger");
+      }
+    }
+
+    let chatHistory = [];
+
+    function renderEmptyState() {
+      const thread = document.getElementById("chatThread");
+      thread.innerHTML = '<div class="chat-empty">No messages yet. Ask a question to get started.</div>';
+    }
+
+    function scrollToBottom() {
+      const thread = document.getElementById("chatThread");
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function addUserBubble(question, role) {
+      const thread = document.getElementById("chatThread");
+      const empty = thread.querySelector(".chat-empty");
+      if (empty) empty.remove();
+
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble user";
+      bubble.innerHTML = `<div class="role-badge">${role}</div><div>${question}</div>`;
+      thread.appendChild(bubble);
+      scrollToBottom();
+    }
+
+    function addThinkingBubble() {
+      const thread = document.getElementById("chatThread");
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble thinking";
+      bubble.id = "thinkingBubble";
+      bubble.textContent = "Thinking...";
+      thread.appendChild(bubble);
+      scrollToBottom();
+    }
+
+    function removeThinkingBubble() {
+      const el = document.getElementById("thinkingBubble");
+      if (el) el.remove();
+    }
+
+    function addAssistantBubble(answer, sources, role) {
+      const thread = document.getElementById("chatThread");
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble assistant";
+
+      const srcId = "src-" + Date.now();
+      let sourcesHtml = "";
+      if (sources && sources.length) {
+        sourcesHtml = `
+          <div class="sources-toggle" onclick="toggleSources('${srcId}')">&#9654; Sources (${sources.length})</div>
+          <div class="sources-content" id="${srcId}">${JSON.stringify(sources, null, 2)}</div>
+        `;
+      }
+
+      bubble.innerHTML = `<div class="role-badge">ContextLens · ${role}</div><div>${marked.parse(answer)}</div>${sourcesHtml}`;
+      thread.appendChild(bubble);
+      scrollToBottom();
+    }
+
+    function toggleSources(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const isHidden = el.style.display === "none" || !el.style.display;
+      el.style.display = isHidden ? "block" : "none";
+      el.previousElementSibling.innerHTML = (isHidden ? "&#9660;" : "&#9654;") + el.previousElementSibling.innerHTML.substring(1);
+    }
+
+    function clearChat() {
+      chatHistory = [];
+      renderEmptyState();
+      document.getElementById('ctxMeter').style.display = 'none';
+    }
+
+    function updateCtxMeter(usage) {
+      const meter = document.getElementById('ctxMeter');
+      const fill = document.getElementById('ctxFill');
+      const label = document.getElementById('ctxLabel');
+      const pct = Math.min(100, Math.round((usage.prompt_tokens / usage.limit) * 100));
+      meter.style.display = 'flex';
+      fill.style.width = pct + '%';
+      fill.style.background = pct < 60 ? '#34a853' : pct < 85 ? '#f5a623' : '#d93025';
+      label.textContent = `${usage.prompt_tokens} / ${usage.limit} tokens (${pct}%)`;
     }
 
     async function ask() {
       const role = document.getElementById("role").value;
       const question = document.getElementById("question").value.trim();
 
-      if (!question) {
-        alert("Enter a question");
-        return;
+      if (!question) return;
+
+      document.getElementById("question").value = "";
+      addUserBubble(question, role);
+      addThinkingBubble();
+
+      const btnAsk = document.getElementById("btnAsk");
+      btnAsk.disabled = true;
+
+      try {
+        const workspace_context = (document.getElementById("workspaceContext").value || "").trim();
+        const memoryOn = document.getElementById('memoryToggle').checked;
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role, question, history: memoryOn ? chatHistory : [], workspace_context })
+        });
+
+        const data = await res.json();
+        removeThinkingBubble();
+
+        if (data.error_type === "context_window_exceeded") {
+          addAssistantBubble(
+            "**Context window exceeded.** Your conversation history is too long for the model to process.\n\nPlease click **Clear Chat** and try your question again.",
+            [], role
+          );
+          return;
+        }
+
+        const answer = data.answer || "No answer received.";
+        addAssistantBubble(answer, data.sources, role);
+
+        chatHistory.push({ role: "user", content: question });
+        chatHistory.push({ role: "assistant", content: answer });
+
+        if (data.token_usage) updateCtxMeter(data.token_usage);
+
+        if (chatHistory.length > 20) {
+          chatHistory = chatHistory.slice(-20);
+        }
+      } catch (err) {
+        removeThinkingBubble();
+        addAssistantBubble("Error: " + err.message, [], role);
+      } finally {
+        btnAsk.disabled = false;
       }
-
-      document.getElementById("answer").textContent = "Thinking...";
-
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, question })
-      });
-
-      const data = await res.json();
-      document.getElementById("answer").textContent = data.answer || "";
-      document.getElementById("sources").textContent = JSON.stringify(data.sources || [], null, 2);
     }
+
+    addRepoCard();
+    renderEmptyState();
+
+    const savedCtx = localStorage.getItem('workspaceContext');
+    if (savedCtx) document.getElementById('workspaceContext').value = savedCtx;
   </script>
 </body>
 </html>
