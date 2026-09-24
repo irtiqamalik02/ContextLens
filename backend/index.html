@@ -350,9 +350,9 @@
     <h3>Ask a question</h3>
 
     <details class="workspace-details">
-      <summary>Workspace context (optional)</summary>
-      <div class="small" style="margin:6px 0 4px;">Describe how your repos relate to each other. This helps the LLM give more accurate answers.</div>
-      <textarea id="workspaceContext" rows="4" oninput="localStorage.setItem('workspaceContext', this.value)" placeholder="e.g. This workspace has 3 repos:&#10;- project-backend: Core platform backend with shared business logic&#10;- atlas-backend: Tenant-specific backend for Atlas, depends on project-backend&#10;- web: Common UI serving both project and atlas"></textarea>
+      <summary>Workspace context (optional) - Filter & describe your repos</summary>
+      <div class="small" style="margin:6px 0 4px;">Use <code>repos:</code> or <code>tags:</code> to filter searches. Add context to help the LLM understand relationships.</div>
+      <textarea id="workspaceContext" rows="4" oninput="localStorage.setItem('workspaceContext', this.value)" placeholder="Example:&#10;repos: auth-service, payment-service&#10;tags: backend&#10;&#10;Context: Auth service handles authentication, payment service processes transactions."></textarea>
     </details>
 
     <div class="row">

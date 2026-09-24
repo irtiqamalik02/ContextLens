@@ -2,7 +2,7 @@ import hashlib
 import logging
 from typing import List, Dict, Any
 
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, MatchAny
 
 import config
 
@@ -66,13 +66,53 @@ def upsert_to_qdrant(docs: List[Dict[str, Any]]):
     client.upsert(collection_name=config.QDRANT_COLLECTION, points=points)
 
 
-def search_qdrant(query_vector: List[float], top_k: int = 12) -> List[Dict[str, Any]]:
+def search_qdrant(
+    query_vector: List[float], 
+    top_k: int = 12,
+    repo_names: List[str] = None,
+    tags: List[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Search Qdrant with optional filtering by repo_names and tags.
+    
+    Args:
+        query_vector: The embedding vector to search with
+        top_k: Number of results to return
+        repo_names: Optional list of repo names to filter by (OR condition)
+        tags: Optional list of tags to filter by (OR condition)
+    
+    Returns:
+        List of documents with scores
+    """
     client = get_qdrant()
     ensure_collection()
+    
+    # Build filter conditions
+    query_filter = None
+    filter_conditions = []
+    
+    if repo_names:
+        # Filter by repo_name using OR (should) condition
+        filter_conditions.append(
+            FieldCondition(key="repo_name", match=MatchAny(any=repo_names))
+        )
+    
+    if tags:
+        # Filter by tag using OR (should) condition
+        filter_conditions.append(
+            FieldCondition(key="tag", match=MatchAny(any=tags))
+        )
+    
+    # If we have filter conditions, combine them with AND logic
+    if filter_conditions:
+        query_filter = Filter(must=filter_conditions)
+        logger.info(f"[search_qdrant] Filtering by repo_names={repo_names}, tags={tags}")
+    
     response = client.query_points(
         collection_name=config.QDRANT_COLLECTION,
         query=query_vector,
         limit=top_k,
+        query_filter=query_filter,
         with_payload=True,
     )
     docs = []
@@ -80,6 +120,8 @@ def search_qdrant(query_vector: List[float], top_k: int = 12) -> List[Dict[str, 
         doc = dict(point.payload)
         doc["score"] = point.score
         docs.append(doc)
+    
+    logger.info(f"[search_qdrant] Retrieved {len(docs)} results (top_k={top_k})")
     return docs
 
 

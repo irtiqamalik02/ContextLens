@@ -13,6 +13,7 @@ from ollama_client import ollama_chat
 from indexer import index_repo, index_swagger_text
 from retriever import retrieve
 from prompts import build_messages, ContextWindowExceededError, CONTEXT_WINDOW
+from context_parser import parse_workspace_context
 
 logger = logging.getLogger("contextlens")
 
@@ -122,7 +123,22 @@ async def api_chat(req: ChatRequest):
         }
 
     try:
-        sources = await retrieve(req.question, top_k=6)
+        # Parse workspace context to extract filtering criteria
+        filters = parse_workspace_context(req.workspace_context)
+        
+        # Retrieve with optional filtering
+        sources = await retrieve(
+            req.question, 
+            top_k=6,
+            repo_names=filters.get("repo_names"),
+            tags=filters.get("tags")
+        )
+        
+        if not sources:
+            return {
+                "answer": "I couldn't find relevant code to answer this question. Try rephrasing or ensure the relevant repo is indexed.",
+                "sources": [],
+            }
         history_dicts = [{"role": h.role, "content": h.content} for h in req.history]
         messages, token_estimate = build_messages(req.role, req.question, sources, history=history_dicts, workspace_context=req.workspace_context)
         answer = await ollama_chat(messages)
@@ -156,7 +172,7 @@ async def api_chat(req: ChatRequest):
             {
                 "answer": "Ollama response timed out. The model may be overloaded or the prompt is too large. Please clear your chat history and try again with a simpler question.",
                 "sources": [],
-                "error_type": "timeout",
+                "error_type": "ollama timeout",
             },
             status_code=504,
         )
